@@ -2,7 +2,20 @@
 chcp 65001 >nul
 rem Install KoeType and register it to start automatically at Windows login
 cd /d "%~dp0"
-where py >nul 2>nul || (echo Python が見つかりません。https://www.python.org/ から Python 3.11 以降をインストールしてください。& pause & exit /b 1)
+where py >nul 2>nul
+if errorlevel 1 (
+  echo Python が見つかりません。Windows標準の winget で Python 3.12 をインストールします...
+  winget install -e --id Python.Python.3.12 --scope user --accept-package-agreements --accept-source-agreements
+  if errorlevel 1 (
+    echo 自動インストールに失敗しました。https://www.python.org/ から Python 3.12 をインストールしてください。
+    pause
+    exit /b 1
+  )
+  echo.
+  echo Python をインストールしました。この画面を閉じて、install_windows.bat をもう一度実行してください。
+  pause
+  exit /b 0
+)
 if not exist .venv (
   echo 初回セットアップ中（数分かかります）...
   py -3 -m venv .venv

@@ -285,7 +285,7 @@ class KoeType:
         hk = self.hotkey_label
         badge = "英訳" if self._translate_once else None
         if state == "recording":
-            self.overlay.show("recording", "入力中", hint=f"{hk}を離すと確定", badge=badge)
+            self.overlay.show("recording", "入力中", hint=f"{hk}で確定 ・ Escで取消", badge=badge)
         elif state == "handsfree":
             self.overlay.show("recording", "入力中", hint=f"{hk}で確定 ・ Escで取消", badge=badge)
         elif state == "processing":
@@ -341,7 +341,7 @@ class KoeType:
     def build_menu(self):
         hotkey = "Fn" if IS_MAC else self.cfg["hotkey_windows"]
         return pystray.Menu(
-            pystray.MenuItem(lambda i: f"KoeType — {hotkey}長押しで話す", None, enabled=False),
+            pystray.MenuItem(lambda i: f"KoeType — {hotkey}で入力開始／もう一度押して終了", None, enabled=False),
             pystray.MenuItem(
                 lambda i: f"今回の起動で {self.stats['count']}回 / {self.stats['chars']}文字",
                 None, enabled=False),
@@ -384,7 +384,10 @@ class KoeType:
             log("Groq APIキーが未登録です。先に setup_key を実行してください。")
             if self.cfg["stt_engine"] == "groq":
                 _windows_message("Groq APIキーが未登録です。install_windows.bat をもう一度実行してください。")
-                sys.exit(1)
+                if IS_MAC:
+                    subprocess.run(["osascript", "-e", 'display alert "KoeType" message '
+                                    '"Groq APIキーが未登録です。ターミナルで install_mac.sh をもう一度実行してください。"'])
+                sys.exit(0)  # 0で終了：自動再起動を繰り返さないように
 
         threading.Thread(target=self.worker, daemon=True).start()
         threading.Thread(target=self.audio_loop, daemon=True).start()
@@ -428,7 +431,7 @@ class KoeType:
                 log("許可すると数秒以内に自動で再起動します（ターミナル起動の場合はターミナルを再起動）。")
                 sys.exit(1)
         hk = "Fn" if IS_MAC else self.cfg["hotkey_windows"]
-        log(f"起動しました。{hk} を押している間だけ録音 → 離すと入力。{hk}+Space でハンズフリー。録音中にShiftで英訳。")
+        log(f"起動しました。{hk} を押すと入力開始 → もう一度押すと終了して入力。入力中にShiftで英訳、Escで取り消し。")
         self.icon.run(setup=setup)
 
 
