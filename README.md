@@ -31,14 +31,22 @@
 
 ## セットアップ（Windows）
 1. Python 3.11以降をインストールする（https://www.python.org/ 。インストール時に「Add python.exe to PATH」にチェック）
-2. このフォルダを好きな場所に置いて、`install_windows.bat` をダブルクリックする
-3. Groq APIキーを貼り付ける（Macと同じキーでOK）
-4. タスクトレイ（画面右下）にマイクのアイコンが出たら完了。次回からはログイン時に自動で起動する
+2. Git をインストールして、このリポジトリを取得する（PowerShellで）
+   ```
+   winget install Git.Git
+   cd $HOME
+   git clone https://github.com/9haru9/koetype.git koetype-git
+   ```
+   （Gitを使わずZIPでダウンロードしても動きますが、その場合は差分更新ができません）
+3. 取得したフォルダの `install_windows.bat` をダブルクリックする
+4. Groq APIキーを貼り付ける（Macと同じキーでOK）
+5. タスクトレイ（画面右下）にマイクのアイコンが出たら完了。次回からはログイン時に自動で起動する
 
 - ホットキー: **右Ctrl** を押しながら話す / 軽く1回押すと録音継続、もう一度押すと確定 / 録音中に`Shift`で英訳 / `Esc`で取り消し
 - KoeType はバックグラウンドで動き、黒い画面（コンソール）は残りません。終了はタスクトレイのアイコン →「終了」
 - 終了した後にまた起動したいときは `start_windows.bat`。記録を見ながら動かしたいときは `debug_windows.bat`。記録は `%USERPROFILE%\.koetype\koetype.log` に残る
 - 自動起動を解除するときは `uninstall_windows.bat`
+- **更新**: `update_windows.bat` をダブルクリック。GitHubから差分だけ取得し、必要なら部品を入れ直して、起動し直す
 - ターミナル（Windows Terminal・PowerShell・cmd）では「選択テキストの音声編集」は自動でオフになる（Ctrl+C が処理の中断になってしまうため）
 
 ## 設定
