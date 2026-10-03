@@ -81,7 +81,7 @@ def clipboard_restore(saved) -> None:
         pyperclip.copy(saved)
 
 
-def clipboard_set_text(text: str) -> None:
+def clipboard_set_text(text: str, transient: bool = False) -> None:
     pyperclip.copy(text)
 
 

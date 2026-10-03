@@ -1,12 +1,14 @@
-sounddevice
-numpy
-soundfile
-requests
-pyperclip
-pystray
-pillow
-pynput
-pyobjc-framework-Quartz; sys_platform == "darwin"
-pyobjc-framework-Cocoa; sys_platform == "darwin"
+# 動作確認したバージョンに固定（意図しない更新や改ざんされた新版を避けるため）
+sounddevice==0.5.6
+numpy==2.5.3
+soundfile==0.14.0
+requests==2.34.2
+pyperclip==1.11.0
+pystray==0.19.5
+pillow==12.3.0
+pynput==1.8.2
+pyobjc-framework-Quartz==12.2.2; sys_platform == "darwin"
+pyobjc-framework-Cocoa==12.2.2; sys_platform == "darwin"
+pyobjc-framework-ApplicationServices==12.2.2; sys_platform == "darwin"
 # オフライン認識を使う場合（任意）
-mlx-whisper; sys_platform == "darwin" and platform_machine == "arm64"
+mlx-whisper==0.4.3; sys_platform == "darwin" and platform_machine == "arm64"

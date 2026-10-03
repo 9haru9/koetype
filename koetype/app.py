@@ -137,7 +137,7 @@ class KoeType:
             return
         t0 = time.time()
         app_name = plat.frontmost_app()
-        selected = self._get_selection() if self._selection_allowed(app_name) else None
+        selected = self._get_selection(app_name) if self.cfg.get("edit_selected_text") else None
 
         cfg = self.cfg
         if translate:
@@ -162,19 +162,30 @@ class KoeType:
         self.stats["count"] += 1
         self.stats["chars"] += len(result)
         log(f"[{mode}] {app_name} / 録音{dur:.1f}秒 認識{t1 - t0:.1f}秒 整形{t2 - t1:.1f}秒")
-        log(f"  生: {raw}")
-        log(f"  出: {result}")
+        if self.cfg.get("history_enabled"):  # 履歴オフなら文章はログにも残さない
+            log(f"  生: {raw}")
+            log(f"  出: {result}")
         self._save_history(mode, app_name, dur, raw, result, selected)
 
-    def _selection_allowed(self, app_name: str | None) -> bool:
-        if not self.cfg.get("edit_selected_text"):
-            return False
+    def _copy_allowed(self, app_name: str | None) -> bool:
         name = (app_name or "").lower()
         return not any(a.lower() == name or (len(a) > 4 and a.lower() in name)
                        for a in self.cfg.get("selection_skip_apps", []))
 
-    def _get_selection(self) -> str | None:
-        """Cmd/Ctrl+C を送ってクリップボードが変われば選択中テキストあり。"""
+    def _get_selection(self, app_name: str | None) -> str | None:
+        """選択中のテキストを取得。なければ None。"""
+        # 1) Mac: アクセシビリティAPIで直接読む（キー送信もクリップボードも使わない）
+        if hasattr(plat, "selected_text_ax"):
+            try:
+                ok, text = plat.selected_text_ax()
+            except Exception:
+                ok, text = False, None
+            if ok:
+                return text if text and text.strip() else None
+        # 2) 非対応アプリ: Cmd/Ctrl+C を送ってクリップボードが変わるかで判定。
+        #    ターミナル（Ctrl+Cが中断になる）や、未選択時に行全体をコピーするエディタでは行わない。
+        if not self._copy_allowed(app_name):
+            return None
         saved = plat.clipboard_save()
         before = plat.clipboard_change_count()
         plat.send_copy()
@@ -191,11 +202,14 @@ class KoeType:
 
     def _insert(self, text: str):
         saved = plat.clipboard_save()
-        plat.clipboard_set_text(text)
+        plat.clipboard_set_text(text, transient=True)
+        ours = plat.clipboard_change_count()
         time.sleep(0.03)
         plat.send_paste()
-        time.sleep(0.3)  # 貼り付け先アプリが読み取るのを待ってから復元
-        plat.clipboard_restore(saved)
+        time.sleep(0.5)  # 貼り付け先アプリが読み取るのを待ってから復元
+        # その間にユーザーが別の物をコピーしていたら上書きしない
+        if plat.clipboard_change_count() == ours:
+            plat.clipboard_restore(saved)
 
     def _save_history(self, mode, app_name, dur, raw, result, selected):
         if not self.cfg.get("history_enabled"):

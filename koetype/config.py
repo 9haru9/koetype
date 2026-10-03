@@ -44,6 +44,7 @@ DEFAULTS = {
         "Code": "コード・技術用語はそのまま。余計な敬語を足さない。",
         "Terminal": "コマンドや技術用語はそのまま。句点は付けない。",
         "iTerm": "コマンドや技術用語はそのまま。句点は付けない。",
+        "ターミナル": "コマンドや技術用語はそのまま。句点は付けない。",
         "Claude": "AIへの指示文。意図が明確に伝わるよう簡潔に。",
         "ChatGPT": "AIへの指示文。意図が明確に伝わるよう簡潔に。",
     },
@@ -54,8 +55,12 @@ DEFAULTS = {
     "edit_selected_text": True,
     # 選択テキストの確認（Ctrl+C送信）をしないアプリ。
     # Windowsのターミナルでは Ctrl+C が「実行中の処理の中断」になるため。
+    # 未選択時に行全体をコピーするエディタも、誤って編集モードにならないよう除外。
+    # （Macではまずアクセシビリティ機能で選択テキストを読むので、ここは非対応アプリ用の予備）
     "selection_skip_apps": ["WindowsTerminal", "cmd", "powershell", "pwsh", "conhost",
-                            "wezterm", "alacritty", "mintty", "Terminal", "iTerm"],
+                            "wezterm", "alacritty", "mintty", "Terminal", "ターミナル", "iTerm",
+                            "Code", "Cursor", "Windsurf", "idea64", "pycharm64", "webstorm64",
+                            "IntelliJ IDEA", "PyCharm", "WebStorm", "sublime_text", "Sublime Text"],
     "sounds": True,
     # これより短い録音は誤操作として無視（秒）
     "min_record_seconds": 0.4,
@@ -63,8 +68,16 @@ DEFAULTS = {
 }
 
 
-def load_config() -> dict:
+def _ensure_home() -> None:
     HOME_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(HOME_DIR, 0o700)  # 履歴・ログ・キーを本人以外が読めないように
+    except OSError:
+        pass
+
+
+def load_config() -> dict:
+    _ensure_home()
     cfg = dict(DEFAULTS)
     if CONFIG_PATH.exists():
         try:
@@ -77,7 +90,7 @@ def load_config() -> dict:
 
 
 def save_config(cfg: dict) -> None:
-    HOME_DIR.mkdir(parents=True, exist_ok=True)
+    _ensure_home()
     CONFIG_PATH.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
@@ -93,7 +106,7 @@ def load_api_key() -> str | None:
 
 
 def save_api_key(key: str) -> None:
-    HOME_DIR.mkdir(parents=True, exist_ok=True)
+    _ensure_home()
     ENV_PATH.write_text(f"GROQ_API_KEY={key.strip()}\n", encoding="utf-8")
     try:
         os.chmod(ENV_PATH, 0o600)
