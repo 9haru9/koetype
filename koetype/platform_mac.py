@@ -1,0 +1,179 @@
+"""macOS: Fnキー監視（Quartzイベントタップ）、キー送信、クリップボード、最前面アプリ。"""
+import time
+
+import Quartz
+from AppKit import NSPasteboard, NSWorkspace
+
+KEY_FN = 63
+KEY_SHIFTS = (56, 60)
+KEY_SPACE = 49
+KEY_ESC = 53
+KEY_C = 8
+KEY_V = 9
+FN_FLAG = Quartz.kCGEventFlagMaskSecondaryFn
+
+
+class HotkeyListener:
+    """Fn長押し=録音、Fn+Space=ハンズフリー切替、Esc=キャンセル。
+
+    コールバック: on_press(), on_release(), on_toggle_handsfree(), on_cancel()
+    メインスレッドのRunLoopで動く（pystrayの run() がRunLoopを回す）。
+    """
+
+    def __init__(self, on_press, on_release, on_toggle_handsfree, on_cancel, is_active,
+                 on_translate=None):
+        self.on_press = on_press
+        self.on_release = on_release
+        self.on_toggle_handsfree = on_toggle_handsfree
+        self.on_cancel = on_cancel
+        self.on_translate = on_translate
+        self.is_active = is_active  # 録音中/ハンズフリー中かどうか（Escを奪うかの判断）
+        self._fn_down = False
+        self._used_as_combo = False
+        self._tap = None
+
+    def start(self) -> None:
+        mask = (
+            Quartz.CGEventMaskBit(Quartz.kCGEventFlagsChanged)
+            | Quartz.CGEventMaskBit(Quartz.kCGEventKeyDown)
+        )
+        self._tap = Quartz.CGEventTapCreate(
+            Quartz.kCGSessionEventTap,
+            Quartz.kCGHeadInsertEventTap,
+            Quartz.kCGEventTapOptionDefault,
+            mask,
+            self._callback,
+            None,
+        )
+        if self._tap is None:
+            # 許可ダイアログを出させる（入力監視・キー送信）
+            Quartz.CGRequestListenEventAccess()
+            Quartz.CGRequestPostEventAccess()
+            raise PermissionError(
+                "キー入力を監視できません。システム設定 > プライバシーとセキュリティ > "
+                "「アクセシビリティ」と「入力監視」で KoeType（ターミナルから起動した場合はターミナル）を許可してください。"
+            )
+        source = Quartz.CFMachPortCreateRunLoopSource(None, self._tap, 0)
+        Quartz.CFRunLoopAddSource(Quartz.CFRunLoopGetMain(), source, Quartz.kCFRunLoopCommonModes)
+        Quartz.CGEventTapEnable(self._tap, True)
+
+    def _callback(self, proxy, etype, event, refcon):
+        # タイムアウト等でタップが無効化されたら再有効化
+        if etype in (Quartz.kCGEventTapDisabledByTimeout, Quartz.kCGEventTapDisabledByUserInput):
+            Quartz.CGEventTapEnable(self._tap, True)
+            return event
+        keycode = Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventKeycode)
+        flags = Quartz.CGEventGetFlags(event)
+
+        if etype == Quartz.kCGEventFlagsChanged and keycode == KEY_FN:
+            down = bool(flags & FN_FLAG)
+            if down and not self._fn_down:
+                self._fn_down = True
+                self._used_as_combo = False
+                self.on_press()
+            elif not down and self._fn_down:
+                self._fn_down = False
+                self.on_release(combo=self._used_as_combo)
+            return event
+
+        # 録音中にShift → この回は英語に翻訳して入力
+        if (etype == Quartz.kCGEventFlagsChanged and keycode in KEY_SHIFTS
+                and flags & Quartz.kCGEventFlagMaskShift and self.is_active() and self.on_translate):
+            self.on_translate()
+            return event
+
+        if etype == Quartz.kCGEventKeyDown:
+            if self._fn_down and keycode == KEY_SPACE:
+                self._used_as_combo = True
+                self.on_toggle_handsfree()
+                return None  # スペースを入力させない
+            if self._fn_down and keycode != KEY_SPACE:
+                # Fn+矢印など通常のFnショートカットは録音扱いにしない
+                self._used_as_combo = True
+            if keycode == KEY_ESC and self.is_active():
+                self.on_cancel()
+                return None
+        return event
+
+
+def _send_key(keycode: int, flags: int) -> None:
+    src = Quartz.CGEventSourceCreate(Quartz.kCGEventSourceStateHIDSystemState)
+    for down in (True, False):
+        ev = Quartz.CGEventCreateKeyboardEvent(src, keycode, down)
+        Quartz.CGEventSetFlags(ev, flags)
+        Quartz.CGEventPost(Quartz.kCGAnnotatedSessionEventTap, ev)
+        time.sleep(0.01)
+
+
+def send_paste() -> None:
+    _send_key(KEY_V, Quartz.kCGEventFlagMaskCommand)
+
+
+def send_copy() -> None:
+    _send_key(KEY_C, Quartz.kCGEventFlagMaskCommand)
+
+
+# --- クリップボード（画像なども含めて退避・復元する） ---
+
+def clipboard_save():
+    pb = NSPasteboard.generalPasteboard()
+    saved = []
+    for item in pb.pasteboardItems() or []:
+        entry = {}
+        for t in item.types():
+            data = item.dataForType_(t)
+            if data is not None:
+                entry[t] = data
+        saved.append(entry)
+    return saved
+
+
+def clipboard_restore(saved) -> None:
+    from AppKit import NSPasteboardItem
+
+    pb = NSPasteboard.generalPasteboard()
+    pb.clearContents()
+    items = []
+    for entry in saved:
+        item = NSPasteboardItem.alloc().init()
+        for t, data in entry.items():
+            item.setData_forType_(data, t)
+        items.append(item)
+    if items:
+        pb.writeObjects_(items)
+
+
+def clipboard_set_text(text: str) -> None:
+    pb = NSPasteboard.generalPasteboard()
+    pb.clearContents()
+    pb.setString_forType_(text, "public.utf8-plain-text")
+
+
+def clipboard_get_text() -> str | None:
+    return NSPasteboard.generalPasteboard().stringForType_("public.utf8-plain-text")
+
+
+def clipboard_change_count() -> int:
+    return NSPasteboard.generalPasteboard().changeCount()
+
+
+def frontmost_app() -> str | None:
+    app = NSWorkspace.sharedWorkspace().frontmostApplication()
+    return str(app.localizedName()) if app else None
+
+
+_sound_cache = {}
+
+
+def play_sound(kind: str) -> None:
+    from AppKit import NSSound
+
+    from .sounds import ensure_sounds
+
+    if not _sound_cache:
+        for k, path in ensure_sounds().items():
+            _sound_cache[k] = NSSound.alloc().initWithContentsOfFile_byReference_(path, True)
+    s = _sound_cache.get(kind)
+    if s:
+        s.stop()
+        s.play()

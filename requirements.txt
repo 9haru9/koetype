@@ -1,0 +1,12 @@
+sounddevice
+numpy
+soundfile
+requests
+pyperclip
+pystray
+pillow
+pynput
+pyobjc-framework-Quartz; sys_platform == "darwin"
+pyobjc-framework-Cocoa; sys_platform == "darwin"
+# オフライン認識を使う場合（任意）
+mlx-whisper; sys_platform == "darwin" and platform_machine == "arm64"
