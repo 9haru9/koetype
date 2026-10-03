@@ -16,6 +16,7 @@ set "STARTUP=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
 powershell -NoProfile -Command "$s=(New-Object -ComObject WScript.Shell).CreateShortcut('%STARTUP%\KoeType.lnk'); $s.TargetPath='%~dp0.venv\Scripts\pythonw.exe'; $s.Arguments='-m koetype'; $s.WorkingDirectory='%~dp0'; $s.Save()"
 start "" "%~dp0.venv\Scripts\pythonw.exe" -m koetype
 echo.
-echo 完了。タスクトレイ（画面右下）にマイクのアイコンが出ます。
+echo 完了。KoeType はバックグラウンドで動いています（タスクトレイのマイクのアイコン）。
 echo 右Ctrl を押しながら話す → 離すと入力。次回からはログイン時に自動起動します。
-pause
+echo この画面は10秒後に自動で閉じます（閉じてもKoeTypeは終了しません）。
+timeout /t 10 >nul

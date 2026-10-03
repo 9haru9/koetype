@@ -36,7 +36,9 @@
 4. タスクトレイ（画面右下）にマイクのアイコンが出たら完了。次回からはログイン時に自動で起動する
 
 - ホットキー: **右Ctrl** を押しながら話す / 軽く1回押すと録音継続、もう一度押すと確定 / 録音中に`Shift`で英訳 / `Esc`で取り消し
-- 様子を見たいときは `start_windows.bat`（コンソールに記録が表示される）。自動起動を解除するときは `uninstall_windows.bat`
+- KoeType はバックグラウンドで動き、黒い画面（コンソール）は残りません。終了はタスクトレイのアイコン →「終了」
+- 終了した後にまた起動したいときは `start_windows.bat`。記録を見ながら動かしたいときは `debug_windows.bat`。記録は `%USERPROFILE%\.koetype\koetype.log` に残る
+- 自動起動を解除するときは `uninstall_windows.bat`
 - ターミナル（Windows Terminal・PowerShell・cmd）では「選択テキストの音声編集」は自動でオフになる（Ctrl+C が処理の中断になってしまうため）
 
 ## 設定

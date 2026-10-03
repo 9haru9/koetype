@@ -352,6 +352,7 @@ class KoeType:
         if not self.api_key and (self.cfg["stt_engine"] == "groq" or self.cfg["cleanup_engine"] == "groq"):
             log("Groq APIキーが未登録です。先に setup_key を実行してください。")
             if self.cfg["stt_engine"] == "groq":
+                _windows_message("Groq APIキーが未登録です。install_windows.bat をもう一度実行してください。")
                 sys.exit(1)
 
         threading.Thread(target=self.worker, daemon=True).start()
@@ -389,7 +390,36 @@ class KoeType:
         self.icon.run(setup=setup)
 
 
+def _detach_on_windows() -> None:
+    """Windowsでコンソール付き（python.exe）で起動された場合、pythonw.exe で起動し直して即終了する。
+
+    これでコンソール画面を閉じてもアプリは終了せず、タスクトレイに常駐し続ける。
+    デバッグ用にコンソールで動かしたいときは `python -m koetype --console`。
+    """
+    if IS_MAC or "--console" in sys.argv or sys.stdout is None:
+        return
+    pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
+    if not os.path.exists(pythonw):
+        return
+    flags = 0x00000008 | 0x00000200 | 0x08000000  # DETACHED_PROCESS | NEW_PROCESS_GROUP | NO_WINDOW
+    subprocess.Popen([pythonw, "-m", "koetype"], cwd=os.getcwd(), creationflags=flags,
+                     close_fds=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL)
+    print("KoeType をバックグラウンドで起動しました（タスクトレイのマイクのアイコン）。この画面は閉じてOKです。")
+    sys.exit(0)
+
+
+def _windows_message(text: str) -> None:
+    """コンソールなしで動いているときのエラー表示。"""
+    if not IS_MAC and sys.stdout is None:
+        ctypes = __import__("ctypes")
+        ctypes.windll.user32.MessageBoxW(None, text, "KoeType", 0x10)
+
+
 def main():
+    _detach_on_windows()
+    if sys.stderr is None:  # pythonw では予期しないエラーもログファイルに残す
+        sys.stderr = open(HISTORY_PATH.parent / "koetype.log", "a", encoding="utf-8", buffering=1)
     KoeType().run()
 
 
