@@ -60,6 +60,8 @@ class KoeType:
         self._translate_once = False
         self.active = False  # 論理的な録音中フラグ（ホットキー側で管理）
         self.audio_cmds: queue.Queue = queue.Queue()
+        self.overlay = None  # 画面下の状態表示バー（run() で作成）
+        self.hotkey_label = "Fn" if IS_MAC else self.cfg["hotkey_windows"].replace("ctrl_r", "右Ctrl")
 
     # ---------- ホットキーのコールバック（素早く返すこと） ----------
     # マイクの開始・停止はここでは行わず、録音スレッドに依頼する。
@@ -100,6 +102,7 @@ class KoeType:
             self._translate_once = True
             self._sound("start")
             log("この回は英語に翻訳して入力します")
+            self._set_state(self.state)  # 表示バーに「英訳」バッジを出す
 
     def on_cancel(self):
         self.handsfree = False
@@ -115,6 +118,7 @@ class KoeType:
         if cancel:
             self._set_state("idle")
             self._sound("cancel")
+            self._flash("info", "キャンセルしました", 0.8)
         else:
             self._sound("stop")
             self._set_state("processing")
@@ -162,6 +166,8 @@ class KoeType:
             except Exception as e:
                 log(f"エラー: {e}")
                 self._sound("error")
+                msg = str(e)
+                self._flash("error", "エラー：" + (msg[:40] + "…" if len(msg) > 40 else msg), 3.0)
             finally:
                 if self.jobs.empty() and not self.active:
                     self._set_state("idle")
@@ -170,6 +176,8 @@ class KoeType:
         dur = audio_mod.duration(audio)
         if dur < self.cfg["min_record_seconds"] or audio_mod.is_silent(audio):
             log(f"短すぎる/無音のためスキップ（{dur:.1f}秒）")
+            if dur >= self.cfg["min_record_seconds"]:
+                self._flash("info", "音声が聞き取れませんでした", 1.2)
             return
         t0 = time.time()
         app_name = plat.frontmost_app()
@@ -183,6 +191,7 @@ class KoeType:
         t1 = time.time()
         if not raw:
             log("認識結果が空でした")
+            self._flash("info", "音声が聞き取れませんでした", 1.2)
             return
 
         if selected:
@@ -194,6 +203,7 @@ class KoeType:
         t2 = time.time()
 
         self._insert(result)
+        self._flash("done", "入力しました", 0.7)
         self.last_text = result
         self.stats["count"] += 1
         self.stats["chars"] += len(result)
@@ -265,8 +275,27 @@ class KoeType:
             except Exception:
                 pass
 
+    def _flash(self, kind, text, seconds):
+        if self.overlay and self.cfg.get("overlay", True):
+            self.overlay.flash(kind, text, seconds)
+
+    def _update_overlay(self, state):
+        if not self.overlay or not self.cfg.get("overlay", True):
+            return
+        hk = self.hotkey_label
+        badge = "英訳" if self._translate_once else None
+        if state == "recording":
+            self.overlay.show("recording", "入力中", hint=f"{hk}を離すと確定", badge=badge)
+        elif state == "handsfree":
+            self.overlay.show("recording", "入力中", hint=f"{hk}で確定 ・ Escで取消", badge=badge)
+        elif state == "processing":
+            self.overlay.show("processing", "考え中", badge=badge)
+        else:
+            self.overlay.hide()
+
     def _set_state(self, state):
         self.state = state
+        self._update_overlay(state)
         if not self.icon:
             return
         img = make_icon(state)
@@ -329,6 +358,8 @@ class KoeType:
             pystray.MenuItem("選択テキストを音声で編集",
                              self._toggle("edit_selected_text", True, False),
                              checked=self._checked("edit_selected_text", True)),
+            pystray.MenuItem("画面下に状態を表示", self._toggle("overlay", True, False),
+                             checked=self._checked("overlay", True)),
             pystray.MenuItem("効果音", self._toggle("sounds", True, False),
                              checked=self._checked("sounds", True)),
             pystray.Menu.SEPARATOR,
@@ -368,6 +399,17 @@ class KoeType:
         listener = plat.HotkeyListener(**kwargs)
 
         self.icon = pystray.Icon("koetype", make_icon("idle"), "KoeType", self.build_menu())
+        try:
+            if IS_MAC:
+                from AppKit import NSApplication, NSApplicationActivationPolicyAccessory
+                NSApplication.sharedApplication().setActivationPolicy_(
+                    NSApplicationActivationPolicyAccessory)
+                from .overlay_mac import Overlay
+            else:
+                from .overlay_win import Overlay
+            self.overlay = Overlay(lambda: self.recorder.level)
+        except Exception as e:
+            log(f"状態表示バーを作成できませんでした（音とアイコンのみで動作します）: {e}")
 
         def setup(icon):
             icon.visible = True

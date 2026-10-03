@@ -14,6 +14,7 @@ class Recorder:
         self._chunks: list[np.ndarray] = []
         self._stream: sd.InputStream | None = None
         self._lock = threading.Lock()
+        self.level = 0.0  # 直近の音量（状態表示バーの波形用）
 
     @property
     def recording(self) -> bool:
@@ -24,6 +25,7 @@ class Recorder:
             if self._stream is not None:
                 return
             self._chunks = []
+            self.level = 0.0
             self._stream = sd.InputStream(
                 samplerate=SAMPLE_RATE, channels=1, dtype="float32", callback=self._callback
             )
@@ -31,6 +33,7 @@ class Recorder:
 
     def _callback(self, indata, frames, time_info, status):
         self._chunks.append(indata[:, 0].copy())
+        self.level = float(np.sqrt(np.mean(indata[:, 0] ** 2)))
 
     def stop(self) -> np.ndarray:
         with self._lock:
@@ -39,6 +42,7 @@ class Recorder:
             return np.zeros(0, dtype=np.float32)
         stream.stop()
         stream.close()
+        self.level = 0.0
         if not self._chunks:
             return np.zeros(0, dtype=np.float32)
         return np.concatenate(self._chunks)

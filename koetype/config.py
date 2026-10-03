@@ -62,6 +62,8 @@ DEFAULTS = {
                             "Code", "Cursor", "Windsurf", "idea64", "pycharm64", "webstorm64",
                             "IntelliJ IDEA", "PyCharm", "WebStorm", "sublime_text", "Sublime Text"],
     "sounds": True,
+    # 画面下（Dock・タスクバーの上）に「入力中」「考え中」を表示
+    "overlay": True,
     # これより短い録音は誤操作として無視（秒）
     "min_record_seconds": 0.4,
     "history_enabled": True,
