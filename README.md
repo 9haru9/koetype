@@ -97,9 +97,9 @@ irm https://raw.githubusercontent.com/9haru9/koetype/main/get_windows.ps1 | iex
   - 準備ができると画面下に「オフライン認識を使えます」と表示される
 - 対応: Apple製チップ（M1以降）のMac、Windows。**Intel製のMacでは使えません**
 - オフにするときは、同じメニューをもう一度選ぶ（通常のGroqでの認識に戻る）
-- 完全に削除して容量を空けたいとき（Mac）:
+- 完全に削除して容量を空けたいとき（Mac。ほかにHugging FaceのAIモデルを使っていない場合）:
   ```
-  ~/koetype/.venv/bin/pip uninstall -y mlx-whisper torch mlx && rm -rf ~/.cache/huggingface/hub/models--mlx-community--whisper-large-v3-turbo
+  ~/koetype/.venv/bin/pip uninstall -y mlx-whisper torch mlx && rm -rf ~/.cache/huggingface/hub/models--mlx-community--whisper-large-v3-turbo ~/.cache/huggingface/hub/blobs
   ```
 - AI整形（フィラー除去など）はオフライン認識中もGroqを使うため、整形をオンにしている場合はテキストだけがGroqに送られる
 
