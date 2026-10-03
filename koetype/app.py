@@ -313,9 +313,36 @@ class KoeType:
             self.cfg[key] = off_value if self.cfg[key] == on_value else on_value
             save_config(self.cfg)
             log(f"{key} = {self.cfg[key]}")
-            if key == "stt_engine":
-                threading.Thread(target=stt.warmup_local, args=(self.cfg,), daemon=True).start()
         return action
+
+    def _toggle_offline(self, icon, item):
+        if self.cfg["stt_engine"] == "local":
+            self.cfg["stt_engine"] = "groq"
+            save_config(self.cfg)
+            log("オフライン認識をオフにしました")
+            return
+        if not stt.local_supported():
+            log("このPCではオフライン認識は使えません（MacはApple製チップのみ対応）")
+            self._flash("info", "このPCではオフライン認識は使えません", 2.5)
+            return
+
+        def enable():
+            if not stt.local_installed():
+                log("オフライン認識の部品をインストールしています（約1GB・数分）")
+                self._show_overlay("processing", "オフライン認識を準備中（数分）")
+                if not stt.install_local():
+                    self._flash("error", "オフライン認識の準備に失敗しました", 3.0)
+                    return
+            self.cfg["stt_engine"] = "local"
+            save_config(self.cfg)
+            log("オフライン認識をオンにしました（初回は音声認識モデル約1.5GBをダウンロード）")
+            stt.warmup_local(self.cfg)
+            self._flash("done", "オフライン認識を使えます", 2.0)
+        threading.Thread(target=enable, daemon=True).start()
+
+    def _show_overlay(self, kind, text):
+        if self.overlay and self.cfg.get("overlay", True):
+            self.overlay.show(kind, text)
 
     def _checked(self, key, value):
         return lambda item: self.cfg.get(key) == value
@@ -352,8 +379,7 @@ class KoeType:
             pystray.MenuItem("常に英語に翻訳して入力",
                              self._toggle("output_language", "English", None),
                              checked=self._checked("output_language", "English")),
-            pystray.MenuItem("オフライン認識（ローカルWhisper）",
-                             self._toggle("stt_engine", "local", "groq"),
+            pystray.MenuItem("オフライン認識（ローカルWhisper）", self._toggle_offline,
                              checked=self._checked("stt_engine", "local")),
             pystray.MenuItem("選択テキストを音声で編集",
                              self._toggle("edit_selected_text", True, False),

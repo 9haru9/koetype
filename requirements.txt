@@ -10,5 +10,4 @@ pynput==1.8.2
 pyobjc-framework-Quartz==12.2.2; sys_platform == "darwin"
 pyobjc-framework-Cocoa==12.2.2; sys_platform == "darwin"
 pyobjc-framework-ApplicationServices==12.2.2; sys_platform == "darwin"
-# オフライン認識を使う場合（任意）
-mlx-whisper==0.4.3; sys_platform == "darwin" and platform_machine == "arm64"
+# オフライン認識の部品は requirements-offline.txt（標準では入れない。メニューでオンにした時に自動で入る）

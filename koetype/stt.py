@@ -1,5 +1,10 @@
 """音声→テキスト。Groq（クラウド無料枠）またはローカルWhisper。"""
+import importlib.util
+import platform
 import re
+import subprocess
+import sys
+from pathlib import Path
 
 import numpy as np
 import requests
@@ -29,7 +34,34 @@ def _whisper_prompt(cfg: dict) -> str:
     return base
 
 
+OFFLINE_REQUIREMENTS = Path(__file__).resolve().parent.parent / "requirements-offline.txt"
+
+
+def local_supported() -> bool:
+    """オフライン認識が使える機種か（MacはApple製チップのみ）。"""
+    if IS_MAC:
+        return platform.machine() == "arm64"
+    return sys.platform == "win32"
+
+
+def local_installed() -> bool:
+    return importlib.util.find_spec("mlx_whisper" if IS_MAC else "faster_whisper") is not None
+
+
+def install_local() -> bool:
+    """オフライン認識の部品をインストール（数分かかる）。"""
+    flags = 0x08000000 if sys.platform == "win32" else 0  # Windows: コンソールを出さない
+    r = subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", str(OFFLINE_REQUIREMENTS)],
+                       capture_output=True, text=True, creationflags=flags)
+    if r.returncode != 0:
+        print(f"[koetype] オフライン認識のインストールに失敗: {r.stderr[-500:]}", flush=True)
+    importlib.invalidate_caches()
+    return r.returncode == 0 and local_installed()
+
+
 def transcribe(audio: np.ndarray, cfg: dict, api_key: str | None) -> str:
+    if cfg["stt_engine"] == "local" and not local_installed():
+        cfg = {**cfg, "stt_engine": "groq"}  # 部品がなければGroqで認識
     if cfg["stt_engine"] == "local":
         text = _transcribe_local(audio, cfg)
     else:
@@ -92,7 +124,7 @@ def _transcribe_local(audio: np.ndarray, cfg: dict) -> str:
 
 def warmup_local(cfg: dict) -> None:
     """ローカルモデルを事前ロード（初回の待ち時間を減らす）。"""
-    if cfg["stt_engine"] == "local":
+    if cfg["stt_engine"] == "local" and local_installed():
         try:
             _transcribe_local(np.zeros(audio_mod.SAMPLE_RATE // 2, dtype=np.float32), cfg)
         except Exception as e:
