@@ -14,11 +14,32 @@
 
 機能: フィラー（えー・あの）の除去、言い直しの修正（「3時、いや4時」→「4時」）、句読点、箇条書き、個人辞書、アプリごとの文体、英語に翻訳して入力、履歴、オフライン認識。
 
+## かんたんインストール（Git・Python不要）
+**GitもPythonも入っていないPCでも、下の1行を貼るだけで準備からインストールまで自動で行います。**
+事前に https://console.groq.com/keys で Groq のAPIキー（無料）を発行しておいてください。途中で聞かれます。
+
+**Mac**（ターミナルに貼り付けて Enter）
+```
+curl -fsSL https://raw.githubusercontent.com/9haru9/koetype/main/get_mac.sh | bash
+```
+- Gitがなければ「Xcodeコマンドラインツール」のインストール画面が出るので「インストール」を押す（完了すると自動で続きを行う）
+- Pythonがなければ、KoeType専用のPython 3.12を自動で用意する（管理者パスワード不要）
+- 終わったら、下の「セットアップ（Mac）」の手順3・4（許可の設定）を行う
+
+**Windows**（PowerShell に貼り付けて Enter）
+```
+irm https://raw.githubusercontent.com/9haru9/koetype/main/get_windows.ps1 | iex
+```
+- GitとPythonがなければ、Windows標準の winget で自動インストールする（途中で許可を求められたら「はい」）
+- 「まだ認識されていません」と出たら、PowerShellを開き直して同じ1行をもう一度実行する
+
+どちらも、もう一度実行すると最新版への更新として動きます。
+
 ## 費用
 - 標準設定は **Groq の無料枠**を使います（音声認識は1日2,000回・約8時間ぶんまで）。クレジットカードの登録は不要です。
 - メニューの「オフライン認識」をオンにすると、音声認識はMacの中だけで処理します（完全無料・ネット不要。Apple Silicon搭載Macのみ）。AI整形を使う場合だけGroqにテキストが送られます。
 
-## セットアップ（Mac）
+## セットアップ（Mac）— 手動で行う場合
 必要なもの: Apple Silicon または Intel の Mac（macOS 13以降）。GitとPythonは、入っていなければ下の手順の中で自動で用意されます
 
 1. https://console.groq.com/keys でAPIキーを無料で発行する
@@ -47,7 +68,7 @@
 ~/koetype/.venv/bin/python -m koetype.selftest
 ```
 
-## セットアップ（Windows）
+## セットアップ（Windows）— 手動で行う場合
 1. Python が入っていなくても大丈夫です（`install_windows.bat` が見つからなければ自動で入れます。そのときは画面の案内どおりもう一度実行）
 2. Git をインストールして、このリポジトリを取得する（PowerShellで）
    ```
