@@ -58,27 +58,29 @@ class KoeType:
         self.stats = {"count": 0, "chars": 0}
         self._press_time = 0.0
         self._translate_once = False
+        self.active = False  # 論理的な録音中フラグ（ホットキー側で管理）
+        self.audio_cmds: queue.Queue = queue.Queue()
 
     # ---------- ホットキーのコールバック（素早く返すこと） ----------
+    # マイクの開始・停止はここでは行わず、録音スレッドに依頼する。
+    # macOSの音声システムが固まってもキー監視（メインスレッド）を巻き込まないため。
     def on_press(self):
         if self.handsfree:
-            # ハンズフリー中にもう一度押したら終了して入力
+            # 録音継続中にもう一度押したら終了して入力
             self.handsfree = False
             self._finish(cancel=False)
             return
-        try:
-            self.recorder.start()
-        except Exception as e:
-            log(f"録音を開始できません: {e}")
-            self._sound("error")
+        if self.active:
             return
+        self.active = True
         self._press_time = time.time()
         self._translate_once = False
         self._set_state("recording")
         self._sound("start")
+        self.audio_cmds.put(("start",))
 
     def on_release(self, combo: bool):
-        if self.handsfree or not self.recorder.recording:
+        if self.handsfree or not self.active:
             return
         # Fnを短くタップしただけなら「タップで開始 → もう一度タップで確定」モードにする
         if not combo and time.time() - self._press_time < 0.35:
@@ -88,7 +90,7 @@ class KoeType:
         self._finish(cancel=combo)
 
     def on_toggle_handsfree(self):
-        if self.recorder.recording and not self.handsfree:
+        if self.active and not self.handsfree:
             self.handsfree = True
             self._set_state("handsfree")
             log("録音継続中（もう一度Fnを押すと確定、Escでキャンセル）")
@@ -104,18 +106,52 @@ class KoeType:
         self._finish(cancel=True)
 
     def is_active(self) -> bool:
-        return self.recorder.recording
+        return self.active
 
     def _finish(self, cancel: bool):
-        audio = self.recorder.stop()
+        if not self.active:
+            return
+        self.active = False
         if cancel:
             self._set_state("idle")
             self._sound("cancel")
-            return
-        self._sound("stop")
-        self.jobs.put((audio, self._translate_once))
+        else:
+            self._sound("stop")
+            self._set_state("processing")
+        self.audio_cmds.put(("stop", cancel, self._translate_once))
         self._translate_once = False
-        self._set_state("processing")
+
+    # ---------- 録音スレッド ----------
+    def _guarded(self, fn, what: str, timeout: float = 5.0):
+        """音声システムが固まったら自動で再起動する（launchdが10秒後に起動し直す）。"""
+        def hung():
+            log(f"{what}が{timeout:.0f}秒応答しないため、KoeTypeを再起動します")
+            os._exit(1)
+        timer = threading.Timer(timeout, hung)
+        timer.daemon = True
+        timer.start()
+        try:
+            return fn()
+        finally:
+            timer.cancel()
+
+    def audio_loop(self):
+        while True:
+            cmd = self.audio_cmds.get()
+            if cmd[0] == "start":
+                try:
+                    self._guarded(self.recorder.start, "マイクの開始")
+                except Exception as e:
+                    log(f"録音を開始できません: {e}")
+                    self.active = False
+                    self.handsfree = False
+                    self._set_state("idle")
+                    self._sound("error")
+            else:
+                _, cancel, translate = cmd
+                audio = self._guarded(self.recorder.stop, "マイクの停止")
+                if not cancel:
+                    self.jobs.put((audio, translate))
 
     # ---------- 処理スレッド ----------
     def worker(self):
@@ -127,7 +163,7 @@ class KoeType:
                 log(f"エラー: {e}")
                 self._sound("error")
             finally:
-                if self.jobs.empty() and not self.recorder.recording:
+                if self.jobs.empty() and not self.active:
                     self._set_state("idle")
 
     def _process(self, audio, translate=False):
@@ -319,6 +355,7 @@ class KoeType:
                 sys.exit(1)
 
         threading.Thread(target=self.worker, daemon=True).start()
+        threading.Thread(target=self.audio_loop, daemon=True).start()
         threading.Thread(target=stt.warmup_local, args=(self.cfg,), daemon=True).start()
 
         kwargs = dict(on_press=self.on_press, on_release=self.on_release,
